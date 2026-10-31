@@ -42,7 +42,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             ))}
           </div>
         </div>
-        <p className="relative text-xs text-white/40">© {new Date().getFullYear()} Brightloop Software, Inc.</p>
+        <p className="relative text-xs text-white/40">© 2026 Brightloop Software, Inc.</p>
       </div>
       <div className="flex flex-col bg-background">
         <div className="flex items-center justify-between p-6 lg:justify-end">
