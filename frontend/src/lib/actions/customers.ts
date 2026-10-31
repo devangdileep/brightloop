@@ -4,27 +4,31 @@ import { revalidatePath } from "next/cache";
 import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { customerSchema } from "@/lib/validations";
+import { api, BackendError } from "@/lib/api-client";
 import type { ActionResult } from "@/types";
 
 export async function saveCustomer(formData: FormData): Promise<ActionResult> {
-  const { supabase, profile } = await getSessionProfile();
-  if (!supabase || !profile || profile.role === "customer") return { ok: false, error: "Staff access required" };
-
   const parsed = customerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid customer" };
 
   const id = formData.get("id") as string | null;
-  if (id) {
-    const { error } = await supabase.from("customers").update(parsed.data).eq("id", id);
-    if (error) return { ok: false, error: error.message };
-    revalidatePath("/dashboard", "layout");
-    return { ok: true, message: "Customer updated", id };
-  }
 
-  const { data, error } = await supabase.from("customers").insert(parsed.data).select("id").single();
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard", "layout");
-  return { ok: true, message: "Customer created", id: data.id };
+  try {
+    if (id) {
+      const data = await api.put<{ id: string }>(`/customers/${id}`, parsed.data);
+      revalidatePath("/dashboard", "layout");
+      return { ok: true, message: "Customer updated", id: data?.id ?? id };
+    }
+
+    const data = await api.post<{ id: string }>("/customers", parsed.data);
+    revalidatePath("/dashboard", "layout");
+    return { ok: true, message: "Customer created", id: data.id };
+  } catch (e) {
+    if (e instanceof BackendError) {
+      return { ok: false, error: e.message };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to save customer" };
+  }
 }
 
 export async function inviteCustomerPortal(customerId: string): Promise<ActionResult> {

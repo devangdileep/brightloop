@@ -1,36 +1,41 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { api, BackendError } from "@/lib/api-client";
 import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { settingsSchema } from "@/lib/validations";
 import type { ActionResult, UserRole } from "@/types";
 
 export async function saveSettings(formData: FormData): Promise<ActionResult> {
-  const { supabase, profile } = await getSessionProfile();
-  if (!supabase || profile?.role !== "admin") return { ok: false, error: "Administrator access required" };
-
   const parsed = settingsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid settings" };
 
-  const { error } = await supabase.from("app_settings").update(parsed.data).eq("id", 1);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/dashboard", "layout");
-  return { ok: true, message: "Workspace settings saved" };
+  try {
+    await api.put<unknown>("/settings", parsed.data);
+    revalidatePath("/dashboard", "layout");
+    return { ok: true, message: "Workspace settings saved" };
+  } catch (error) {
+    if (error instanceof BackendError) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: false, error: error instanceof Error ? error.message : "Failed to save settings" };
+  }
 }
 
 export async function updateMemberRole(userId: string, role: UserRole): Promise<ActionResult> {
-  const { supabase, profile, user } = await getSessionProfile();
-  if (!supabase || profile?.role !== "admin") return { ok: false, error: "Administrator access required" };
-  if (user?.id === userId) return { ok: false, error: "You cannot change your own role" };
   if (!["admin", "staff", "customer"].includes(role)) return { ok: false, error: "Invalid role" };
 
-  const { error } = await supabase.from("profiles").update({ role }).eq("id", userId);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/dashboard/settings");
-  return { ok: true, message: "Role updated" };
+  try {
+    await api.put<unknown>(`/profiles/${userId}/role?role=${encodeURIComponent(role)}`);
+    revalidatePath("/dashboard/settings");
+    return { ok: true, message: "Role updated" };
+  } catch (error) {
+    if (error instanceof BackendError) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: false, error: error instanceof Error ? error.message : "Failed to update role" };
+  }
 }
 
 export async function inviteTeamMember(formData: FormData): Promise<ActionResult> {

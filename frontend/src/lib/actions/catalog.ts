@@ -1,34 +1,35 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSessionProfile } from "@/lib/auth";
 import { planSchema, productSchema } from "@/lib/validations";
+import { api, BackendError } from "@/lib/api-client";
 import type { ActionResult } from "@/types";
 
 export async function saveProduct(formData: FormData): Promise<ActionResult> {
-  const { supabase, profile } = await getSessionProfile();
-  if (!supabase || profile?.role !== "admin") return { ok: false, error: "Administrator access required" };
-
   const parsed = productSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid product" };
 
   const id = formData.get("id") as string | null;
-  if (id) {
-    const { error } = await supabase.from("products").update(parsed.data).eq("id", id);
-    if (error) return { ok: false, error: error.message };
+
+  try {
+    if (id) {
+      const data = await api.put<{ id: string }>(`/products/${id}`, parsed.data);
+      revalidatePath("/dashboard", "layout");
+      return { ok: true, message: "Product updated", id: data?.id ?? id };
+    }
+
+    const data = await api.post<{ id: string }>("/products", parsed.data);
     revalidatePath("/dashboard", "layout");
-    return { ok: true, message: "Product updated", id };
+    return { ok: true, message: "Product created", id: data.id };
+  } catch (e) {
+    if (e instanceof BackendError) {
+      return { ok: false, error: e.message };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to save product" };
   }
-  const { data, error } = await supabase.from("products").insert(parsed.data).select("id").single();
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard", "layout");
-  return { ok: true, message: "Product created", id: data.id };
 }
 
 export async function savePlan(formData: FormData): Promise<ActionResult> {
-  const { supabase, profile } = await getSessionProfile();
-  if (!supabase || profile?.role !== "admin") return { ok: false, error: "Administrator access required" };
-
   const parsed = planSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid plan" };
 
@@ -42,14 +43,21 @@ export async function savePlan(formData: FormData): Promise<ActionResult> {
   const payload = { ...parsed.data, features };
 
   const id = formData.get("id") as string | null;
-  if (id) {
-    const { error } = await supabase.from("plans").update(payload).eq("id", id);
-    if (error) return { ok: false, error: error.message };
+
+  try {
+    if (id) {
+      const data = await api.put<{ id: string }>(`/plans/${id}`, payload);
+      revalidatePath("/dashboard", "layout");
+      return { ok: true, message: "Plan updated", id: data?.id ?? id };
+    }
+
+    const data = await api.post<{ id: string }>("/plans", payload);
     revalidatePath("/dashboard", "layout");
-    return { ok: true, message: "Plan updated", id };
+    return { ok: true, message: "Plan created", id: data.id };
+  } catch (e) {
+    if (e instanceof BackendError) {
+      return { ok: false, error: e.message };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to save plan" };
   }
-  const { data, error } = await supabase.from("plans").insert(payload).select("id").single();
-  if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard", "layout");
-  return { ok: true, message: "Plan created", id: data.id };
 }
