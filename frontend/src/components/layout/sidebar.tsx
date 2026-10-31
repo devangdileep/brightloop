@@ -12,7 +12,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { NAV_GROUPS, NAV_ITEMS } from "@/lib/constants";
+import { ADMIN_NAV_GROUPS, STAFF_NAV_GROUPS, PORTAL_NAV_GROUPS, getRoleHome } from "@/lib/constants";
 import { cn, initials } from "@/lib/utils";
 import type { Profile } from "@/types";
 import { logout } from "@/lib/actions/auth";
@@ -44,31 +44,37 @@ export function SidebarContent({
   const pathname = usePathname();
 
   const groups =
-    profile.role === "customer"
-      ? [
-          { label: "Workspace", items: [NAV_ITEMS[1]] },
-          { label: "Billing", items: [NAV_ITEMS[7], NAV_ITEMS[8]] },
-          { label: "Account", items: [NAV_ITEMS[12]] },
-        ]
-      : NAV_GROUPS.map((group) => ({
-          ...group,
-          items: group.items.filter((item) => item.roles.includes(profile.role)),
-        })).filter((group) => group.items.length > 0);
+    profile.role === "admin"
+      ? ADMIN_NAV_GROUPS
+      : profile.role === "staff"
+      ? STAFF_NAV_GROUPS
+      : PORTAL_NAV_GROUPS;
 
-  const isActive = (href: string) =>
-    href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+  const homeHref = getRoleHome(profile.role);
+
+  const isActive = (href: string) => {
+    if (
+      href === "/dashboard" ||
+      href === "/admin/dashboard" ||
+      href === "/staff/dashboard" ||
+      href === "/portal/dashboard"
+    ) {
+      return pathname === href;
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className={cn("flex h-16 items-center border-b border-sidebar-border", collapsed ? "justify-center px-2" : "justify-between px-4")}>
-        <Link href="/dashboard" onClick={onNavigate} className={cn("flex items-center gap-2.5", collapsed && "hidden")}>
+        <Link href={homeHref} onClick={onNavigate} className={cn("flex items-center gap-2.5", collapsed && "hidden")}>
           <span className="flex size-8 items-center justify-center rounded-lg bg-foreground text-background shadow-sm">
             <Command className="size-4" />
           </span>
           <span className="text-[15px] font-semibold tracking-tight">Brightloop</span>
         </Link>
         {collapsed ? (
-          <Link href="/dashboard" onClick={onNavigate} className="flex size-8 items-center justify-center rounded-lg bg-foreground text-background">
+          <Link href={homeHref} onClick={onNavigate} className="flex size-8 items-center justify-center rounded-lg bg-foreground text-background">
             <Command className="size-4" />
           </Link>
         ) : null}
@@ -183,8 +189,8 @@ function UserMenuContent({ profile }: { profile: Profile }) {
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuItem asChild>
-        <Link href="/dashboard/settings">
-          <Settings className="size-3.5" /> Settings
+        <Link href={profile.role === "customer" ? "/portal/profile" : "/dashboard/settings"}>
+          <Settings className="size-3.5" /> {profile.role === "customer" ? "My Profile" : "Settings"}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator />

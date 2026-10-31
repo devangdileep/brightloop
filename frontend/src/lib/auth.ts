@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getRoleHome } from "@/lib/constants";
 import type { Profile, UserRole } from "@/types";
 
 type Session =
@@ -42,9 +43,20 @@ export async function getSessionProfile(): Promise<Session> {
   return { supabase, user, profile };
 }
 
+export { getRoleHome } from "@/lib/constants";
+
 export async function requireProfile(): Promise<AuthenticatedSession> {
   const session = await getSessionProfile();
-  if (!session.supabase || !session.user || !session.profile) redirect("/login");
+  if (!session.supabase || !session.user || !session.profile) {
+    redirect("/login");
+  }
+
+  // Deactivated accounts cannot access dashboard
+  if (session.profile.status === "inactive" || session.profile.status === "suspended") {
+    await session.supabase.auth.signOut();
+    redirect("/login?error=account_deactivated");
+  }
+
   return {
     supabase: session.supabase,
     user: session.user,
@@ -52,15 +64,27 @@ export async function requireProfile(): Promise<AuthenticatedSession> {
   };
 }
 
+export async function requireCustomer(): Promise<AuthenticatedSession> {
+  const session = await requireProfile();
+  if (session.profile.role !== "customer") {
+    redirect(getRoleHome(session.profile.role));
+  }
+  return session;
+}
+
 export async function requireStaff(): Promise<AuthenticatedSession> {
   const session = await requireProfile();
-  if (session.profile.role === "customer") redirect("/dashboard/portal");
+  if (session.profile.role === "customer") {
+    redirect("/portal/dashboard");
+  }
   return session;
 }
 
 export async function requireAdmin(): Promise<AuthenticatedSession> {
   const session = await requireProfile();
-  if (session.profile.role !== "admin") redirect("/dashboard");
+  if (session.profile.role !== "admin") {
+    redirect(getRoleHome(session.profile.role));
+  }
   return session;
 }
 
@@ -71,3 +95,4 @@ export function canManage(role: UserRole | undefined) {
 export function isAdmin(role: UserRole | undefined) {
   return role === "admin";
 }
+

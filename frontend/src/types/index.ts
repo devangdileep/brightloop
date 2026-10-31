@@ -6,14 +6,39 @@ export type QuotationStatus = "draft" | "sent" | "accepted" | "declined" | "expi
 export type PaymentMethod = "card" | "bank_transfer" | "cash" | "other";
 export type DiscountType = "percentage" | "fixed";
 
+export type UserStatus = "active" | "inactive" | "suspended";
+
 export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
   role: UserRole;
+  status?: UserStatus;
   avatar_url: string | null;
   phone: string | null;
   created_at: string;
+}
+
+export interface StaffDetail {
+  id: string;
+  user_id: string;
+  department: string | null;
+  designation: string | null;
+  joined_at: string;
+  created_at: string;
+  updated_at: string;
+  profile?: Profile;
+}
+
+export interface ActivityLog {
+  id: string;
+  user_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  description: string | null;
+  created_at: string;
+  user?: Pick<Profile, "id" | "full_name" | "email"> | null;
 }
 
 export interface Customer {
@@ -24,10 +49,13 @@ export interface Customer {
   email: string;
   phone: string | null;
   company: string | null;
+  company_name?: string | null;
   country: string | null;
   address: string | null;
+  billing_address?: string | null;
   tax_id: string | null;
   status: "active" | "inactive";
+  customer_status?: "active" | "inactive";
   notes: string | null;
   created_at: string;
 }

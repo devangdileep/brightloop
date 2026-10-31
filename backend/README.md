@@ -10,17 +10,18 @@ This directory contains the database schema, security policies, automation trigg
 backend/
 ├── supabase/
 │   ├── migrations/
-│   │   ├── 20261031000100_schema.sql  # Normalized PostgreSQL schema, functions, triggers
-│   │   └── 20261031000200_rls.sql     # Zero-trust Row-Level Security (RLS) policies
+│   │   ├── 20261031000100_schema.sql          # Normalized PostgreSQL schema, functions, triggers
+│   │   ├── 20261031000200_rls.sql             # Zero-trust Row-Level Security (RLS) policies
+│   │   └── 20261031000300_user_management.sql # User Management: staff_details, activity_logs, status & triggers
 │   ├── functions/
-│   │   └── generate-invoices/         # Edge Function for idempotent recurring billing
+│   │   └── generate-invoices/                 # Edge Function for idempotent recurring billing
 │   │       └── index.ts
-│   ├── seed.sql                       # 15 customers, 8 products, 12 plans, subscriptions, invoices, payments
-│   ├── cron.sql                       # pg_cron scheduled job invoking generate-invoices daily
-│   ├── verify.sql                     # Health check queries to verify setup & RLS
-│   └── config.toml                    # Supabase CLI configuration
-├── .env.example                       # Backend environment template
-└── README.md                          # Documentation
+│   ├── seed.sql                               # Realistic customers, products, plans, subscriptions, invoices, payments
+│   ├── cron.sql                               # pg_cron scheduled job invoking generate-invoices daily
+│   ├── verify.sql                             # Health check queries to verify setup & RLS
+│   └── config.toml                            # Supabase CLI configuration
+├── .env.example                               # Backend environment template
+└── README.md                                  # Documentation
 ```
 
 ---
@@ -37,7 +38,10 @@ npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
 ```
 
-*Alternatively, copy and paste the contents of `supabase/migrations/20261031000100_schema.sql` and `supabase/migrations/20261031000200_rls.sql` directly into your Supabase Dashboard SQL Editor.*
+*Alternatively, execute the migrations in order in your Supabase Dashboard SQL Editor:*
+1. `supabase/migrations/20261031000100_schema.sql`
+2. `supabase/migrations/20261031000200_rls.sql`
+3. `supabase/migrations/20261031000300_user_management.sql`
 
 ### 2. Seed Realistic Demo Data
 
@@ -61,9 +65,16 @@ Execute `supabase/cron.sql` in the Supabase SQL editor with your `PROJECT_REF` a
 
 ---
 
-## Security Model (RLS)
+## Role-Based Security & Permissions Model
 
-- **Admin**: Full read/write access across all tables, system configuration, and financial reports.
-- **Staff**: Operational access (customers, quotations, subscriptions, invoices, payments). Read-only for catalogs.
-- **Customer**: Access restricted exclusively to rows where `customer.user_id = auth.uid()`.
-- **Idempotency**: `invoices` enforces `UNIQUE NULLS NOT DISTINCT (subscription_id, period_start, period_end)` to prevent duplicate billing.
+| Role | Database & UI Capabilities | Restrictions & Route Guards |
+| --- | --- | --- |
+| **Admin** | Full access to `/admin/*`, user management (`staff_details`, status toggling, staff creation), discount/tax catalogs, activity audit logs, and analytics. | Cannot deactivate their own admin account. |
+| **Staff** | Full operational access to `/staff/*` (customers, quotations, subscription activation/cancellation, invoices, manual payment logging). Read-only for plans/products. | Strictly blocked from `/admin/*`, cannot manage staff, cannot alter tax/discount catalogs, cannot change user roles. Redirected to `/staff/dashboard`. |
+| **Customer** | Dedicated `/portal/*` (browse plans, self-subscribe, view/cancel own subscriptions, view/download invoice PDFs, view payment receipts, update profile/password). | Blocked from `/admin/*` and `/staff/*`. Database RLS strictly isolates rows to `customer.user_id = auth.uid()`. Inactive/suspended accounts cannot log in. |
+
+### Core User Management Additions
+- **`profiles.status`**: `active`, `inactive`, `suspended`. Inactive users are rejected at login and signed out by the middleware/proxy.
+- **`staff_details`**: Department, designation, employee ID, and notes linked 1-to-1 to `profiles`.
+- **`activity_logs`**: Immutable audit logs capturing user actions, IP addresses, targets, and timestamps.
+- **Automatic Linking Trigger**: When a user registers as a customer, `handle_new_user()` auto-links existing unassigned `customers` matching that email.
