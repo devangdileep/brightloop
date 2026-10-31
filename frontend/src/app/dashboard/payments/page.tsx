@@ -21,7 +21,7 @@ export default async function PaymentsPage() {
     supabase
       .from("invoices")
       .select("id, number, total, amount_paid, currency, customer:customers(name)")
-      .eq("status", "open")
+      .in("status", ["open", "partially_paid", "overdue"])
       .order("issue_date", { ascending: false }),
   ]);
 

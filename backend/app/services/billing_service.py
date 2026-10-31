@@ -162,12 +162,14 @@ class BillingService:
                 # 6. Document Number
                 invoice_number = await generate_document_number(client, "invoice")
 
+                initial_status = "paid" if total <= Decimal("0.00") else "open"
+
                 # 7. Create Invoice
                 invoice_payload = {
                     "number": invoice_number,
                     "customer_id": sub["customer_id"],
                     "subscription_id": sub_id,
-                    "status": "open",
+                    "status": initial_status,
                     "issue_date": format_date_iso(issue_date_obj),
                     "due_date": format_date_iso(due_date_obj),
                     "period_start": period_start,
