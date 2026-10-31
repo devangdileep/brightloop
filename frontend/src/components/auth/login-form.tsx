@@ -58,6 +58,9 @@ export function LoginForm({ next }: { next?: string }) {
         router.push(destination);
         router.refresh();
       }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Network error. Please try again.";
+      toast.error(message);
     } finally {
       setPending(false);
     }

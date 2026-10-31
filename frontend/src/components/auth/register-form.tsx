@@ -48,6 +48,9 @@ export function RegisterForm() {
         return;
       }
       setSent(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Network error. Please check your connection or ad blocker.";
+      toast.error(message);
     } finally {
       setPending(false);
     }
