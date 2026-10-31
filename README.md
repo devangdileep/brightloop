@@ -457,18 +457,22 @@ brightloop/
 │   ├── tsconfig.json
 │   └── .env.example
 │
-├── backend/                      # Supabase database & serverless infrastructure
+├── backend/                      # Backend REST API & Supabase database infrastructure
+│   ├── app/                      # FastAPI REST API implementation
 │   ├── supabase/
 │   │   ├── migrations/           # PostgreSQL schemas, functions, triggers, and RLS policies
 │   │   │   ├── 20261031000100_schema.sql
-│   │   │   └── 20261031000200_rls.sql
+│   │   │   ├── 20261031000200_rls.sql
+│   │   │   └── 20261031000300_extensions.sql
 │   │   ├── functions/            # Scheduled billing Edge Function (generate-invoices)
 │   │   ├── cron.sql              # pg_cron + pg_net template
 │   │   ├── seed.sql              # Realistic demo seed data (Indian SaaS context, ₹ INR)
 │   │   ├── verify.sql            # Installation checks
 │   │   └── config.toml           # Supabase CLI configuration
+│   ├── API.md                    # Backend REST API contract and known limitations
+│   ├── render.yaml               # Render web service and cron runner specification
 │   ├── .env.example              # Backend environment configuration
-│   └── README.md                 # Database setup and CLI instructions
+│   └── README.md                 # Backend setup and CLI instructions
 │
 ├── package.json                  # Root npm workspace configuration
 ├── .gitignore                    # Root git ignore rules

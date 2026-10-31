@@ -159,3 +159,32 @@ The backend validates the token via Supabase Auth, determines the user's UUID, a
 |---|---|---|---|
 | `GET` | `/api/v1/settings` | Authenticated | Retrieve company settings and default invoice terms |
 | `PUT` | `/api/v1/settings` | Admin | Update company name, logo, currency, default due days |
+
+---
+
+## Database Architecture & Compatibility Contract
+
+The backend adheres strictly to the canonical repository schema:
+- **Plans**: Table `public.plans`, column `interval` (enum `public.billing_interval`: `'daily'`, `'weekly'`, `'monthly'`, `'quarterly'`, `'yearly'`).
+- **Product Variants**: Table `public.product_variants`, using the canonical `price_modifier` column (`effective_price = product.base_price + variant.price_modifier`).
+- **Quotation Templates**: Table `public.quotation_templates`, using `template_lines` JSONB, `default_validity_days`, `default_notes`, and `terms`.
+- **Subscription Lines**: Table `public.subscription_lines`, using `variant_id` (FK to `product_variants`) and `billing_frequency` (enum `public.billing_interval`).
+- **Subscription Events**: Table `public.subscription_events`, using `payload` JSONB and `description`.
+- **Discount Usage**: Table `public.discount_usage`, using `discount_amount` and `applied_at`.
+- **Invoice & Quotation Items**: Using canonical tables `public.invoice_items` and `public.quotation_items`.
+
+---
+
+## Known Limitations
+
+1. **Frontend Invoice Selection on Payments Page**:
+   - The Payments page (`frontend/src/app/dashboard/payments/page.tsx:24`) queries invoices strictly with `.eq("status", "open")`.
+   - Invoices that have partial payments recorded transition to `partially_paid` in the database. Consequently, they do not appear in this specific dropdown on `/dashboard/payments`.
+   - *Workaround*: Staff and customers can record additional partial payments directly on the Invoice Detail page (`/dashboard/invoices/[id]`), which permits payment recording whenever `balance > 0 && status !== 'void'`.
+2. **Pre-Existing Duplicate Period Resolution Requirement**:
+   - Migration `20261031000300_extensions.sql` includes an idempotency pre-check that halts execution if duplicate billing period invoices already exist for a subscription. Duplicate records must be deduplicated before applying the unique index constraint.
+3. **Automated Event Origin Attribution**:
+   - Scheduled recurring billing runs executed by the backend worker using `BILLING_CRON_SECRET` run under the service role without an interactive user JWT (`auth.uid() = NULL`). Corresponding subscription audit event rows will record `created_by = NULL`.
+4. **Single Base Currency per Organization**:
+   - Invoices and settings support configurable currency codes (default `'USD'`), but multi-currency conversions within a single invoice or payment are not handled by the database schema.
+

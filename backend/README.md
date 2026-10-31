@@ -117,3 +117,19 @@ This project includes a `render.yaml` specification for deploying both the FastA
 
 Health check endpoint: `/health`.
 API documentation is available at `/docs`.
+
+---
+
+## Known Limitations
+
+1. **Frontend Invoice Selection on Payments Page**:
+   - The Payments page (`frontend/src/app/dashboard/payments/page.tsx:24`) queries invoices strictly with `.eq("status", "open")`.
+   - Invoices that have partial payments recorded transition to `partially_paid` in the database. Consequently, they do not appear in this specific dropdown on `/dashboard/payments`.
+   - *Workaround*: Staff and customers can record additional partial payments directly on the Invoice Detail page (`/dashboard/invoices/[id]`), which permits payment recording whenever `balance > 0 && status !== 'void'`.
+2. **Pre-Existing Duplicate Period Resolution Requirement**:
+   - Migration `20261031000300_extensions.sql` includes an idempotency pre-check that halts execution if duplicate billing period invoices already exist for a subscription. Duplicate records must be deduplicated before applying the unique index constraint.
+3. **Automated Event Origin Attribution**:
+   - Scheduled recurring billing runs executed by the backend worker using `BILLING_CRON_SECRET` run under the service role without an interactive user JWT (`auth.uid() = NULL`). Corresponding subscription audit event rows will record `created_by = NULL`.
+4. **Single Base Currency per Organization**:
+   - Invoices and settings support configurable currency codes (default `'USD'`), but multi-currency conversions within a single invoice or payment are not handled by the database schema.
+
