@@ -34,7 +34,7 @@ backend/
 │   │   ├── 20261031000100_schema.sql          # Normalized PostgreSQL schema, functions, triggers
 │   │   ├── 20261031000200_rls.sql             # Zero-trust Row-Level Security (RLS) policies
 │   │   ├── 20261031000300_extensions.sql      # Idempotency index & extended subscription/invoice schema
-│   │   └── 20261031000300_user_management.sql # User Management: staff_details, activity_logs, status & triggers
+│   │   └── 20261031000400_user_management.sql # User Management: staff_details, activity_logs, status & triggers
 │   ├── functions/
 │   │   └── generate-invoices/                 # Edge Function for idempotent recurring billing
 │   │       └── index.ts
@@ -113,7 +113,7 @@ npx supabase db push
 1. `supabase/migrations/20261031000100_schema.sql`
 2. `supabase/migrations/20261031000200_rls.sql`
 3. `supabase/migrations/20261031000300_extensions.sql`
-4. `supabase/migrations/20261031000300_user_management.sql`
+4. `supabase/migrations/20261031000400_user_management.sql`
 
 ### 2. Seed Realistic Demo Data
 

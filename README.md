@@ -173,6 +173,8 @@ In the Supabase dashboard, open **SQL Editor** and run the migration files **in 
 
 1. `20261031000100_schema.sql`
 2. `20261031000200_rls.sql`
+3. `20261031000300_extensions.sql`
+4. `20261031000400_user_management.sql`
 
 The RLS migration also creates the private `documents` storage bucket and its policies, so no manual bucket setup is needed.
 
@@ -482,7 +484,8 @@ brightloop/
 │   │   ├── migrations/           # PostgreSQL schemas, functions, triggers, and RLS policies
 │   │   │   ├── 20261031000100_schema.sql
 │   │   │   ├── 20261031000200_rls.sql
-│   │   │   └── 20261031000300_extensions.sql
+│   │   │   ├── 20261031000300_extensions.sql
+│   │   │   └── 20261031000400_user_management.sql
 │   │   ├── functions/            # Scheduled billing Edge Function (generate-invoices)
 │   │   ├── cron.sql              # pg_cron + pg_net template
 │   │   ├── seed.sql              # Realistic demo seed data (Indian SaaS context, ₹ INR)
