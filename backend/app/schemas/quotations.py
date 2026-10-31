@@ -1,6 +1,6 @@
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class QuotationItemBase(BaseModel):
@@ -66,7 +66,10 @@ class QuotationResponse(QuotationBase):
 class QuotationTemplateBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
     description: Optional[str] = None
-    items: List[Dict[str, Any]] = Field(default_factory=list)
+    default_validity_days: int = Field(default=30, gt=0)
+    default_notes: Optional[str] = None
+    terms: Optional[str] = None
+    template_lines: List[Dict[str, Any]] = Field(default_factory=list)
     is_active: bool = True
 
 
@@ -77,7 +80,10 @@ class QuotationTemplateCreate(QuotationTemplateBase):
 class QuotationTemplateUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=150)
     description: Optional[str] = None
-    items: Optional[List[Dict[str, Any]]] = None
+    default_validity_days: Optional[int] = Field(default=None, gt=0)
+    default_notes: Optional[str] = None
+    terms: Optional[str] = None
+    template_lines: Optional[List[Dict[str, Any]]] = None
     is_active: Optional[bool] = None
 
 

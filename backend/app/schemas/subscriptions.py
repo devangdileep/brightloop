@@ -1,14 +1,16 @@
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class SubscriptionLineBase(BaseModel):
     product_id: Optional[str] = None
+    variant_id: Optional[str] = None
     plan_id: Optional[str] = None
     description: str = Field(..., min_length=1)
     quantity: Decimal = Field(default=Decimal("1.00"), gt=0)
     unit_price: Decimal = Field(default=Decimal("0.00"), ge=0)
+    billing_frequency: str = Field(default="monthly", pattern="^(daily|weekly|monthly|quarterly|yearly)$")
     sort_order: int = 0
 
 
@@ -21,13 +23,14 @@ class SubscriptionLineResponse(SubscriptionLineBase):
     subscription_id: str
     amount: Decimal
     created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 
 class SubscriptionBase(BaseModel):
     customer_id: str
     plan_id: str
     quantity: int = Field(default=1, ge=1)
-    started_at: Optional[str] = None
+    started_at: Optional[str] = Field(default=None, validation_alias=AliasChoices("started_at", "start_date"))
     discount_id: Optional[str] = None
     tax_id: Optional[str] = None
     notes: Optional[str] = None
@@ -64,7 +67,7 @@ class SubscriptionEventResponse(BaseModel):
     event_type: str
     from_status: Optional[str] = None
     to_status: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
+    payload: Optional[Dict[str, Any]] = Field(default=None, validation_alias=AliasChoices("payload", "details"))
     created_by: Optional[str] = None
     created_at: Optional[str] = None
 

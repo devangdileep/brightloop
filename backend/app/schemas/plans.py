@@ -1,6 +1,6 @@
 from decimal import Decimal
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class PlanBase(BaseModel):
@@ -8,7 +8,11 @@ class PlanBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
     description: Optional[str] = None
     price: Decimal = Field(default=Decimal("0.00"), ge=0)
-    interval: str = Field(default="monthly", pattern="^(daily|weekly|monthly|quarterly|yearly)$")
+    interval: str = Field(
+        default="monthly",
+        pattern="^(daily|weekly|monthly|quarterly|yearly)$",
+        validation_alias=AliasChoices("interval", "billing_frequency"),
+    )
     interval_count: int = Field(default=1, ge=1, le=36)
     trial_days: int = Field(default=0, ge=0, le=365)
     features: Optional[List[str]] = None
@@ -29,7 +33,11 @@ class PlanUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=150)
     description: Optional[str] = None
     price: Optional[Decimal] = Field(default=None, ge=0)
-    interval: Optional[str] = Field(default=None, pattern="^(daily|weekly|monthly|quarterly|yearly)$")
+    interval: Optional[str] = Field(
+        default=None,
+        pattern="^(daily|weekly|monthly|quarterly|yearly)$",
+        validation_alias=AliasChoices("interval", "billing_frequency"),
+    )
     interval_count: Optional[int] = Field(default=None, ge=1, le=36)
     trial_days: Optional[int] = Field(default=None, ge=0, le=365)
     features: Optional[List[str]] = None

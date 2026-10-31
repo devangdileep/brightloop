@@ -1,6 +1,6 @@
 from decimal import Decimal
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class DiscountBase(BaseModel):
@@ -60,6 +60,7 @@ class DiscountUsageRecord(BaseModel):
     id: str
     discount_id: str
     customer_id: Optional[str] = None
+    subscription_id: Optional[str] = None
     invoice_id: Optional[str] = None
-    amount: Decimal
-    redeemed_at: str
+    discount_amount: Decimal = Field(default=Decimal("0.00"), ge=0)
+    applied_at: str

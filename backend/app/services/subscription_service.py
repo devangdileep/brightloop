@@ -134,11 +134,13 @@ class SubscriptionService:
                 l_dict = {
                     "subscription_id": sub_id,
                     "product_id": line.product_id,
+                    "variant_id": line.variant_id,
                     "plan_id": line.plan_id or payload.plan_id,
                     "description": line.description,
                     "quantity": float(qty),
                     "unit_price": float(u_price),
                     "amount": float(amt),
+                    "billing_frequency": line.billing_frequency or "monthly",
                     "sort_order": line.sort_order or idx,
                 }
                 try:
@@ -197,6 +199,7 @@ class SubscriptionService:
 
         # Log event if table exists
         try:
+            event_payload = {"reason": reason} if reason else {}
             await db.insert(
                 table="subscription_events",
                 data={
@@ -204,7 +207,7 @@ class SubscriptionService:
                     "event_type": f"status_{new_status}",
                     "from_status": current_status,
                     "to_status": new_status,
-                    "details": {"reason": reason} if reason else None,
+                    "payload": event_payload,
                     "created_by": user_id,
                 },
                 single=True,

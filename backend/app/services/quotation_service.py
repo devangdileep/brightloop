@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from app.core.exceptions import BadRequestException, NotFoundException
@@ -143,7 +143,7 @@ class QuotationService:
         db: SupabaseDataClient, payload: QuotationCreateFromTemplate, user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         template = await QuotationService.get_template(db, payload.template_id)
-        raw_items = template.get("items") or []
+        raw_items = template.get("template_lines") or []
         if not raw_items:
             raise BadRequestException("Quotation template has no items")
 
@@ -156,11 +156,16 @@ class QuotationService:
                 "sort_order": item.get("sort_order", 0),
             })
 
+        val_days = int(template.get("default_validity_days") or 30)
+        valid_until = payload.valid_until or (date.today() + timedelta(days=val_days)).isoformat()
+        notes = payload.notes or template.get("default_notes") or template.get("description")
+        terms = payload.terms or template.get("terms")
+
         q_create = QuotationCreate(
             customer_id=payload.customer_id,
-            valid_until=payload.valid_until,
-            notes=payload.notes or template.get("description"),
-            terms=payload.terms,
+            valid_until=valid_until,
+            notes=notes,
+            terms=terms,
             discount_id=payload.discount_id,
             tax_id=payload.tax_id,
             items=items_payload,

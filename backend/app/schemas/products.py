@@ -1,23 +1,32 @@
 from decimal import Decimal
-from typing import List, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class ProductVariantBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
     sku: Optional[str] = Field(default=None, max_length=50)
-    price: Decimal = Field(default=Decimal("0.00"), ge=0)
+    attributes: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    cost_price: Decimal = Field(default=Decimal("0.00"), ge=0)
+    price_modifier: Decimal = Field(default=Decimal("0.00"), description="Adjustment relative to base price")
     is_active: bool = True
 
 
-class ProductVariantCreate(ProductVariantBase):
-    pass
+class ProductVariantCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=150)
+    sku: Optional[str] = Field(default=None, max_length=50)
+    attributes: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    cost_price: Optional[Decimal] = Field(default=Decimal("0.00"), ge=0)
+    price_modifier: Decimal = Field(default=Decimal("0.00"), description="Adjustment relative to base price")
+    is_active: bool = True
 
 
 class ProductVariantUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=150)
     sku: Optional[str] = None
-    price: Optional[Decimal] = Field(default=None, ge=0)
+    attributes: Optional[Dict[str, Any]] = None
+    cost_price: Optional[Decimal] = Field(default=None, ge=0)
+    price_modifier: Optional[Decimal] = None
     is_active: Optional[bool] = None
 
 

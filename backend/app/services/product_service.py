@@ -73,7 +73,9 @@ class ProductService:
             for variant in payload.variants:
                 v_dict = variant.model_dump()
                 v_dict["product_id"] = product_id
-                v_dict["price"] = float(v_dict["price"])
+                v_dict["price_modifier"] = float(v_dict.get("price_modifier", 0.0))
+                if "cost_price" in v_dict and v_dict["cost_price"] is not None:
+                    v_dict["cost_price"] = float(v_dict["cost_price"])
                 try:
                     res = await db.insert(table="product_variants", data=v_dict, single=True)
                     created_variants.append(res)
@@ -136,9 +138,13 @@ class ProductService:
     async def add_variant(
         db: SupabaseDataClient, product_id: str, payload: ProductVariantCreate
     ) -> Dict[str, Any]:
-        v_dict = payload.model_dump()
+        v_dict = payload.model_dump(exclude_unset=True)
         v_dict["product_id"] = product_id
-        v_dict["price"] = float(v_dict["price"])
+        v_dict["price_modifier"] = float(v_dict.get("price_modifier", 0.0))
+
+        if "cost_price" in v_dict and v_dict["cost_price"] is not None:
+            v_dict["cost_price"] = float(v_dict["cost_price"])
+
         return await db.insert(table="product_variants", data=v_dict, single=True)
 
     @staticmethod
@@ -146,8 +152,10 @@ class ProductService:
         db: SupabaseDataClient, variant_id: str, payload: ProductVariantUpdate
     ) -> Dict[str, Any]:
         v_dict = payload.model_dump(exclude_unset=True)
-        if "price" in v_dict and v_dict["price"] is not None:
-            v_dict["price"] = float(v_dict["price"])
+        if "price_modifier" in v_dict and v_dict["price_modifier"] is not None:
+            v_dict["price_modifier"] = float(v_dict["price_modifier"])
+        if "cost_price" in v_dict and v_dict["cost_price"] is not None:
+            v_dict["cost_price"] = float(v_dict["cost_price"])
         return await db.update(
             table="product_variants",
             data=v_dict,

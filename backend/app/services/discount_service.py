@@ -160,6 +160,7 @@ class DiscountService:
         amount: Decimal,
         customer_id: Optional[str] = None,
         invoice_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
     ) -> None:
         discount = await DiscountService.get_discount(db, discount_id)
         current_times = int(discount.get("times_redeemed", 0))
@@ -179,8 +180,9 @@ class DiscountService:
                 data={
                     "discount_id": discount_id,
                     "customer_id": customer_id,
+                    "subscription_id": subscription_id,
                     "invoice_id": invoice_id,
-                    "amount": float(amount),
+                    "discount_amount": float(amount),
                 },
                 single=True,
             )
