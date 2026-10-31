@@ -26,14 +26,38 @@ export function LoginForm({ next }: { next?: string }) {
     setPending(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword(values);
+      const { data, error } = await supabase.auth.signInWithPassword(values);
       if (error) {
         toast.error(error.message);
         return;
       }
-      toast.success("Welcome back");
-      router.push(safeRedirect(next));
-      router.refresh();
+
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, status")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        if (profile?.status === "inactive" || profile?.status === "suspended") {
+          await supabase.auth.signOut();
+          toast.error("Your account has been deactivated. Please contact an administrator.");
+          return;
+        }
+
+        toast.success("Welcome back");
+        const role = profile?.role ?? "customer";
+        const roleHome =
+          role === "admin"
+            ? "/admin/dashboard"
+            : role === "staff"
+            ? "/staff/dashboard"
+            : "/portal/dashboard";
+
+        const destination = next && next !== "/dashboard" ? safeRedirect(next) : roleHome;
+        router.push(destination);
+        router.refresh();
+      }
     } finally {
       setPending(false);
     }

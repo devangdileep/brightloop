@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSessionProfile } from "@/lib/auth";
 import { quotationSchema } from "@/lib/validations";
-import { formatDate } from "@/lib/utils";
+import { addInterval, formatDate } from "@/lib/utils";
 import type { ActionResult } from "@/types";
 
 export async function createQuotation(formData: FormData): Promise<ActionResult> {
@@ -155,4 +155,82 @@ export async function convertQuotationToInvoice(quotationId: string): Promise<Ac
   await supabase.from("quotations").update({ status: "accepted" }).eq("id", quotationId);
   revalidatePath("/dashboard", "layout");
   return { ok: true, message: "Invoice created from quotation", id: invoice.id };
+}
+
+export async function convertQuotationToSubscription(
+  quotationId: string,
+  planId?: string
+): Promise<ActionResult> {
+  const { supabase, profile } = await getSessionProfile();
+  if (!supabase || !profile || profile.role === "customer") {
+    return { ok: false, error: "Staff access required" };
+  }
+
+  const { data: quotation, error: quoteErr } = await supabase
+    .from("quotations")
+    .select("*, items:quotation_items(*)")
+    .eq("id", quotationId)
+    .single();
+
+  if (quoteErr || !quotation) {
+    return { ok: false, error: quoteErr?.message ?? "Quotation not found" };
+  }
+  if (quotation.status === "declined") {
+    return { ok: false, error: "Declined quotations cannot be converted" };
+  }
+
+  // Find a target plan
+  let targetPlanId = planId;
+  if (!targetPlanId) {
+    const { data: firstPlan } = await supabase
+      .from("plans")
+      .select("id")
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (!firstPlan) {
+      return { ok: false, error: "No active subscription plan found to attach to this subscription" };
+    }
+    targetPlanId = firstPlan.id;
+  }
+
+  const { data: plan } = await supabase
+    .from("plans")
+    .select("id, interval, interval_count")
+    .eq("id", targetPlanId)
+    .single();
+
+  if (!plan) return { ok: false, error: "Target plan not found" };
+
+  const startDate = new Date();
+  const periodEnd = addInterval(startDate, plan.interval, plan.interval_count);
+
+  const { data: sub, error: subErr } = await supabase
+    .from("subscriptions")
+    .insert({
+      customer_id: quotation.customer_id,
+      plan_id: targetPlanId,
+      status: "active",
+      quantity: 1,
+      started_at: formatDate(startDate, "yyyy-MM-dd"),
+      current_period_start: formatDate(startDate, "yyyy-MM-dd"),
+      current_period_end: formatDate(periodEnd, "yyyy-MM-dd"),
+      discount_id: quotation.discount_id ?? null,
+      tax_id: quotation.tax_id ?? null,
+      notes: `Converted from quotation ${quotation.number}`,
+      created_by: profile.id,
+    })
+    .select("id")
+    .single();
+
+  if (subErr || !sub) {
+    return { ok: false, error: subErr?.message ?? "Could not create subscription" };
+  }
+
+  await supabase.from("quotations").update({ status: "accepted" }).eq("id", quotationId);
+
+  revalidatePath("/dashboard", "layout");
+  revalidatePath("/staff", "layout");
+  return { ok: true, message: "Quotation converted to subscription", id: sub.id };
 }

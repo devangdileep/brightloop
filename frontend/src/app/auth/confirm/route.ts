@@ -17,5 +17,25 @@ export async function GET(request: Request) {
   });
 
   if (error) return NextResponse.redirect(`${origin}/login?error=verification_failed`);
-  return NextResponse.redirect(`${origin}${next}`);
+
+  let destination = next;
+  if (!destination || destination === "/dashboard") {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile?.role === "admin") destination = "/admin/dashboard";
+      else if (profile?.role === "staff") destination = "/staff/dashboard";
+      else destination = "/portal/dashboard";
+    }
+  }
+
+  return NextResponse.redirect(`${origin}${destination}`);
 }

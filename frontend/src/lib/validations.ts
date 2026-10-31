@@ -15,11 +15,18 @@ export const authLoginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const strongPasswordSchema = z
+  .string()
+  .min(9, "Password must be more than 8 characters")
+  .regex(/[A-Z]/, "Password must include at least one uppercase letter")
+  .regex(/[a-z]/, "Password must include at least one lowercase letter")
+  .regex(/[^A-Za-z0-9]/, "Password must include at least one special character");
+
 export const authRegisterSchema = z
   .object({
     full_name: z.string().min(2, "Enter your full name"),
     email: z.string().email("Enter a valid email address"),
-    password: z.string().min(8, "Use at least 8 characters"),
+    password: strongPasswordSchema,
     confirm_password: z.string(),
   })
   .refine((data) => data.password === data.confirm_password, {
@@ -33,7 +40,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z
   .object({
-    password: z.string().min(8, "Use at least 8 characters"),
+    password: strongPasswordSchema,
     confirm_password: z.string(),
   })
   .refine((data) => data.password === data.confirm_password, {
@@ -158,6 +165,34 @@ export const profileSchema = z.object({
   phone: optionalText,
 });
 
+export const createStaffSchema = z.object({
+  full_name: z.string().min(2, "Full name is required"),
+  email: z.string().email("Enter a valid email address"),
+  phone: optionalText,
+  department: z.string().min(1, "Department is required"),
+  designation: z.string().min(1, "Designation is required"),
+});
+
+export const editStaffSchema = z.object({
+  full_name: z.string().min(2, "Full name is required"),
+  phone: optionalText,
+  department: z.string().min(1, "Department is required"),
+  designation: z.string().min(1, "Designation is required"),
+  status: z.enum(["active", "inactive", "suspended"]).default("active"),
+});
+
+export const customerProfileSchema = z.object({
+  full_name: z.string().min(2, "Full name is required"),
+  phone: optionalText,
+  company_name: optionalText,
+  billing_address: optionalText,
+});
+
+export const customerSelfSubscribeSchema = z.object({
+  plan_id: z.string().uuid("Invalid plan"),
+  quantity: z.coerce.number().int().min(1, "Quantity must be at least 1").default(1),
+});
+
 export const settingsSchema = z.object({
   company_name: z.string().min(2, "Company name is required"),
   support_email: z.string().email("Enter a valid email address"),
@@ -178,6 +213,10 @@ export const formSchemas = {
   payment: paymentSchema,
   profile: profileSchema,
   settings: settingsSchema,
+  createStaff: createStaffSchema,
+  editStaff: editStaffSchema,
+  customerProfile: customerProfileSchema,
+  customerSelfSubscribe: customerSelfSubscribeSchema,
 } as const;
 
 export type FormSchemaKey = keyof typeof formSchemas;

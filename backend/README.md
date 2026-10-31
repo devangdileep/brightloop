@@ -1,10 +1,11 @@
-# Brightloop — Backend API & Database
+# Brightloop — Backend API & Supabase Infrastructure
 
-This directory contains the complete backend for **Brightloop Software Subscription Management System**:
-1. **FastAPI REST API**: High-performance asynchronous backend connecting the frontend to Supabase.
-2. **Supabase PostgreSQL Schema & RLS**: Normalized database schema, triggers, functions, and Zero-Trust Row-Level Security policies.
+This directory contains the complete backend for the **Brightloop Software Subscription Management System**:
+1. **FastAPI REST API**: High-performance asynchronous REST backend connecting the Next.js frontend to Supabase.
+2. **Supabase PostgreSQL Schema & RLS**: Normalized database schema, triggers, functions, user management, and Zero-Trust Row-Level Security policies.
 3. **Recurring Billing Engine**: Automated recurring billing engine with calendar-aware date arithmetic and idempotency protection.
-4. **Render Deployment**: Configuration for zero-downtime deployment on Render.
+4. **Edge Functions & Cron**: Supabase Edge Functions and pg_cron configuration for automated daily billing runs.
+5. **Render Deployment**: Configuration for zero-downtime deployment on Render (`render.yaml`).
 
 ---
 
@@ -13,40 +14,45 @@ This directory contains the complete backend for **Brightloop Software Subscript
 ```
 backend/
 ├── app/
-│   ├── main.py                     # FastAPI application setup, CORS, error handling
+│   ├── main.py                                # FastAPI application setup, CORS, error handling
 │   ├── core/
-│   │   ├── config.py               # Pydantic v2 settings & environment variables
-│   │   ├── security.py             # Supabase Auth JWT validation & token caching
-│   │   ├── permissions.py          # Role definitions (admin, staff, customer)
-│   │   └── exceptions.py           # Centralized exception handling
+│   │   ├── config.py                          # Pydantic v2 settings & environment variables
+│   │   ├── security.py                        # Supabase Auth JWT validation & token caching
+│   │   ├── permissions.py                     # Role definitions (admin, staff, customer)
+│   │   └── exceptions.py                      # Centralized exception handling
 │   ├── database/
-│   │   └── supabase_client.py      # Request-scoped Supabase PostgREST client
+│   │   └── supabase_client.py                 # Request-scoped Supabase PostgREST client
 │   ├── dependencies/
-│   │   └── authentication.py       # Role-based dependency injection
-│   ├── schemas/                    # Pydantic request & response schemas
-│   ├── routers/                    # API v1 modular route handlers
-│   ├── services/                   # Business logic (billing, invoices, PDFs, etc.)
-│   ├── tasks/                      # Scheduled billing task runner
-│   └── utils/                      # Calendar calculations, document numbering, pagination
+│   │   └── authentication.py                  # Role-based dependency injection
+│   ├── schemas/                               # Pydantic request & response schemas
+│   ├── routers/                               # API v1 modular route handlers (82 endpoints)
+│   ├── services/                              # Business logic (billing, invoices, PDFs, etc.)
+│   ├── tasks/                                 # Scheduled billing task runner
+│   └── utils/                                 # Calendar calculations, document numbering, pagination
 ├── supabase/
 │   ├── migrations/
-│   │   ├── 20261031000100_schema.sql  # Core schema, enums, triggers, functions
-│   │   ├── 20261031000200_rls.sql     # Zero-trust RLS policies
-│   │   └── 20261031000300_extensions.sql # Idempotency index & extended tables
-│   ├── functions/generate-invoices/   # Supabase Edge function for billing
-│   ├── seed.sql                       # Demo data
-│   └── cron.sql                       # pg_cron daily schedule
-├── tests/                          # Pytest suite with mock Supabase client
-├── render.yaml                     # Render web service & cron deployment
-├── requirements.txt                # Python dependencies
-├── .env.example                    # Environment variable template
-├── API.md                          # Comprehensive API route documentation
-└── README.md
+│   │   ├── 20261031000100_schema.sql          # Normalized PostgreSQL schema, functions, triggers
+│   │   ├── 20261031000200_rls.sql             # Zero-trust Row-Level Security (RLS) policies
+│   │   ├── 20261031000300_extensions.sql      # Idempotency index & extended subscription/invoice schema
+│   │   └── 20261031000300_user_management.sql # User Management: staff_details, activity_logs, status & triggers
+│   ├── functions/
+│   │   └── generate-invoices/                 # Edge Function for idempotent recurring billing
+│   │       └── index.ts
+│   ├── seed.sql                               # Realistic demo seed data (Indian SaaS context, ₹ INR)
+│   ├── cron.sql                               # pg_cron scheduled job invoking generate-invoices daily
+│   ├── verify.sql                             # Health check queries to verify setup & RLS
+│   └── config.toml                            # Supabase CLI configuration
+├── tests/                                     # Pytest test suite with mock Supabase client
+├── render.yaml                                # Render web service & cron deployment specification
+├── requirements.txt                           # Python dependencies
+├── .env.example                               # Backend environment template
+├── API.md                                     # Comprehensive API route documentation
+└── README.md                                  # Documentation
 ```
 
 ---
 
-## Getting Started Locally
+## Getting Started Locally (FastAPI)
 
 ### 1. Requirements
 - Python 3.12+ (or 3.14+)
@@ -65,13 +71,17 @@ Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-Fill in your `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and optional `SUPABASE_SERVICE_ROLE_KEY`.
+Configure your environment variables:
+- `SUPABASE_URL`: Your Supabase Project URL (`https://<project-ref>.supabase.co`)
+- `SUPABASE_ANON_KEY`: Your project's anon/publishable key
+- `SUPABASE_SERVICE_ROLE_KEY`: Your project's service role key (for privileged operations)
+- `BILLING_CRON_SECRET`: Secret token for billing endpoint authorization
 
 ### 4. Run the API Server
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-Open [http://localhost:8000/docs](http://localhost:8000/docs) for the interactive Swagger documentation.
+Open [http://localhost:8000/docs](http://localhost:8000/docs) for the interactive Swagger documentation, or [http://localhost:8000/redoc](http://localhost:8000/redoc) for ReDoc.
 
 ---
 
@@ -87,17 +97,59 @@ pytest -v
 
 ---
 
-## Database Migrations
+## Database Setup & Migrations (Supabase)
 
-Apply migrations to your Supabase project:
+### 1. Apply Database Migrations
+
+Using the Supabase CLI (from the `backend` folder):
+
 ```bash
 cd backend
+npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
 ```
-Or run the SQL migration files in sequence via the Supabase Dashboard SQL editor:
+
+*Alternatively, execute the migrations in order in your Supabase Dashboard SQL Editor:*
 1. `supabase/migrations/20261031000100_schema.sql`
 2. `supabase/migrations/20261031000200_rls.sql`
 3. `supabase/migrations/20261031000300_extensions.sql`
+4. `supabase/migrations/20261031000300_user_management.sql`
+
+### 2. Seed Realistic Demo Data
+
+Run `supabase/seed.sql` using psql or the Supabase SQL Editor:
+
+```bash
+psql "$DATABASE_URL" -f supabase/seed.sql
+```
+
+### 3. Deploy Recurring Billing Edge Function
+
+```bash
+cd backend
+npx supabase functions deploy generate-invoices --no-verify-jwt
+npx supabase secrets set BILLING_CRON_SECRET=your-random-cron-secret
+```
+
+### 4. Enable Daily Recurring Billing Cron
+
+Execute `supabase/cron.sql` in the Supabase SQL editor with your `PROJECT_REF` and `BILLING_CRON_SECRET` replaced. It runs automatically every day at 02:15 UTC to bill eligible subscriptions.
+
+---
+
+## Role-Based Security & Permissions Model
+
+| Role | Database & UI Capabilities | Restrictions & Route Guards |
+| --- | --- | --- |
+| **Admin** | Full access to `/admin/*`, user management (`staff_details`, status toggling, staff creation), discount/tax catalogs, activity audit logs, and analytics. | Cannot deactivate their own admin account. |
+| **Staff** | Full operational access to `/staff/*` (customers, quotations, subscription activation/cancellation, invoices, manual payment logging). Read-only for plans/products. | Strictly blocked from `/admin/*`, cannot manage staff, cannot alter tax/discount catalogs, cannot change user roles. Redirected to `/staff/dashboard`. |
+| **Customer** | Dedicated `/portal/*` (browse plans, self-subscribe, view/cancel own subscriptions, view/download invoice PDFs, view payment receipts, update profile/password). | Blocked from `/admin/*` and `/staff/*`. Database RLS strictly isolates rows to `customer.user_id = auth.uid()`. Inactive/suspended accounts cannot log in. |
+
+### Core User Management Additions
+- **`profiles.status`**: `active`, `inactive`, `suspended`. Inactive users are rejected at login and signed out by the middleware/proxy.
+- **`staff_details`**: Department, designation, employee ID, and notes linked 1-to-1 to `profiles`.
+- **`activity_logs`**: Immutable audit logs capturing user actions, IP addresses, targets, and timestamps.
+- **Automatic Linking Trigger**: When a user registers as a customer, `handle_new_user()` auto-links existing unassigned `customers` matching that email.
 
 ---
 
@@ -132,4 +184,3 @@ API documentation is available at `/docs`.
    - Scheduled recurring billing runs executed by the backend worker using `BILLING_CRON_SECRET` run under the service role without an interactive user JWT (`auth.uid() = NULL`). Corresponding subscription audit event rows will record `created_by = NULL`.
 4. **Single Base Currency per Organization**:
    - Invoices and settings support configurable currency codes (default `'USD'`), but multi-currency conversions within a single invoice or payment are not handled by the database schema.
-

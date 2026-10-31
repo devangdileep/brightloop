@@ -220,26 +220,21 @@ For a quick local demo, **Authentication → Providers → Email**:
 
 Password reset uses `/auth/callback?next=/reset-password`; invitations use `/auth/callback?next=/dashboard/portal`.
 
-### 7. Create your admin account
+### 7. Create your admin account & demo accounts
 
-Registration always creates a **customer** account by design. Promote yourself after registering:
+Registration always defaults to a **customer** role by default. To set up your primary admin:
 
-1. Start the app (`npm run dev`) and register at `/register`.
-2. In the Supabase SQL Editor run:
+1. Register at `/register` using an email such as `admin@brightloop.io`. Note the password policy: **more than 8 characters, at least 1 uppercase letter, 1 lowercase letter, and 1 special character** (e.g. `BrightLoop#2026`).
+2. Promote the user to `admin` in the Supabase SQL Editor:
 
 ```sql
 update public.profiles
-set role = 'admin'
-where email = 'you@example.com';
+set role = 'admin', status = 'active'
+where email = 'admin@brightloop.io';
 ```
 
-3. Sign out and back in (or refresh) — the sidebar switches to the staff/admin workspace.
-
-To create additional staff accounts, invite them from **Settings → Team & roles** or change their role:
-
-```sql
-update public.profiles set role = 'staff' where email = 'teammate@example.com';
-```
+3. Sign out and sign back in. The login flow immediately detects the admin role and redirects to `/admin/dashboard`.
+4. As an admin, navigate to **User Management** (`/admin/users`) to create Staff accounts with their department, designation, employee ID, and notes directly from the UI without touching the SQL editor!
 
 ### 8. Run the app
 
@@ -253,20 +248,44 @@ If the app shows a **Connect Supabase to get started** screen, the environment v
 
 ---
 
-## Roles and access
+## Roles, Dashboards, and Workflows
 
-| Capability | Admin | Staff | Customer |
+Brightloop features strict role-based architecture with three distinct roles:
+
+```
+                  ┌────────────────────────┐
+                  │      Login Form        │
+                  │   (/login, /register)  │
+                  └───────────┬────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│  Admin Role      │ │  Staff Role      │ │  Customer Role   │
+│  /admin/*        │ │  /staff/*        │ │  /portal/*       │
+│  - Metrics & Rev │ │  - Ops Metrics   │ │  - Active Subs   │
+│  - User Mgt (All)│ │  - Customers     │ │  - Browse Plans  │
+│  - Create Staff  │ │  - Quotes & Subs │ │  - Self-Subscribe│
+│  - Audit Logs    │ │  - Invoices & Pay│ │  - Invoice PDFs  │
+│  - Taxes/Discts  │ │  - Staff Reports │ │  - Pay Receipts  │
+└──────────────────┘ └──────────────────┘ └──────────────────┘
+```
+
+| Capability | Admin (`/admin`) | Staff (`/staff`) | Customer (`/portal`) |
 | --- | :---: | :---: | :---: |
-| Overview, customers, products, plans, subscriptions, quotations, reports | ✅ | ✅ | — |
-| Create/edit customers, subscriptions, quotations, invoices, payments | ✅ | ✅ | — |
-| Products, plans, discounts, taxes | ✅ | read-only | — |
-| Settings, team roles, payment deletion | ✅ | — | — |
-| Own subscriptions, invoices, payments, PDF downloads | ✅ | ✅ | ✅ |
-| Cancel/resume own subscription | — | — | ✅ |
+| **Dedicated Dashboard** | Complete platform & revenue overview, staff/customer ratios, live audit logs | Operational metrics, pending quotes, overdue invoices, quick actions | Active subscription card, renewal dates, pending balances, lifetime spend |
+| **User Management** | Create staff accounts, view all users, activate/deactivate/suspend | View & manage assigned customers | Manage own profile & credentials |
+| **Quotation & Invoices** | Full CRUD + convert to invoice or subscription | Full CRUD + convert to invoice or subscription | Read-only for issued invoices & quotes |
+| **Subscriptions** | Full management & billing runs | Full management & billing runs | Browse plans, self-subscribe, pause, resume, cancel request |
+| **Billing & Payments** | Full management, payment recording & deletion | Manual payment recording, invoice issuance | Download official PDF invoices & receipts |
+| **System Settings & Catalogs** | Edit products, plans, taxes, discounts | Read-only for catalogs | None |
+| **Audit Logs** | Real-time security and operational activity logs | None | None |
 
-Enforcement happens twice: UI navigation/actions hide what a role cannot do, and PostgreSQL RLS plus Server Action role checks reject it anyway. Staff can create and manage customers, subscriptions, quotations, invoices and payments, and can read the admin-managed catalog; catalog edits, finance configuration, team roles and payment deletion are admin-only.
-
-Customers never see other customers' data. Their access is anchored on `customers.user_id = auth.uid()`.
+### Security & Route Guards
+- **Server Middleware/Proxy Guard**: Prevents cross-role access (e.g. staff accessing `/admin/*` or customers accessing `/staff/*`). Users attempting unauthorized routes are seamlessly redirected to their respective role homes.
+- **Deactivated Account Enforcement**: If an admin sets a user's status to `inactive` or `suspended`, their active session is terminated and subsequent login attempts are rejected with an account deactivated notification.
+- **Service-Role Isolation**: Admin actions like staff creation (`createStaffAccount`) invoke `createAdminClient()` exclusively within Node.js Server Actions on the server; the service-role key is never exposed to the browser.
+- **Row-Level Security (RLS)**: Enforced directly on PostgreSQL for all tables (`profiles`, `staff_details`, `customers`, `subscriptions`, `invoices`, `payments`, `activity_logs`). Customer rows are constrained to `customer.user_id = auth.uid()`.
 
 ### Customer portal invitations
 

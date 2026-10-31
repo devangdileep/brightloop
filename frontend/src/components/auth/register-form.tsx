@@ -33,8 +33,8 @@ export function RegisterForm() {
         email: values.email,
         password: values.password,
         options: {
-          data: { full_name: values.full_name },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+          data: { full_name: values.full_name, role: "customer" },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/portal/dashboard`,
         },
       });
       if (error) {
@@ -42,8 +42,8 @@ export function RegisterForm() {
         return;
       }
       if (data.session) {
-        toast.success("Account created");
-        router.push("/dashboard");
+        toast.success("Account created successfully");
+        router.push("/portal/dashboard");
         router.refresh();
         return;
       }
@@ -52,6 +52,14 @@ export function RegisterForm() {
       setPending(false);
     }
   }
+
+  const passwordVal = form.watch("password") || "";
+  const reqs = [
+    { label: "More than 8 characters", met: passwordVal.length > 8 },
+    { label: "One uppercase letter", met: /[A-Z]/.test(passwordVal) },
+    { label: "One lowercase letter", met: /[a-z]/.test(passwordVal) },
+    { label: "One special character", met: /[^A-Za-z0-9]/.test(passwordVal) },
+  ];
 
   if (sent) {
     return (
@@ -77,7 +85,7 @@ export function RegisterForm() {
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Create your account</h1>
         <p className="text-sm text-muted-foreground">
-          Start with a customer account. Admins can grant staff access later.
+          Sign up for a customer portal account to manage subscriptions and invoices.
         </p>
       </div>
 
@@ -99,7 +107,7 @@ export function RegisterForm() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" autoComplete="new-password" placeholder="8+ characters" {...form.register("password")} />
+            <Input id="password" type="password" autoComplete="new-password" placeholder="9+ characters" {...form.register("password")} />
             {form.formState.errors.password ? (
               <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
             ) : null}
@@ -118,9 +126,23 @@ export function RegisterForm() {
             ) : null}
           </div>
         </div>
+
+        {/* Real-time password requirement checklist */}
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+          <p className="font-medium text-muted-foreground mb-1.5">Password requirements:</p>
+          <div className="grid grid-cols-2 gap-1 text-[11px]">
+            {reqs.map((req) => (
+              <div key={req.label} className={`flex items-center gap-1.5 ${req.met ? "text-emerald-600 font-medium" : "text-muted-foreground"}`}>
+                <span className={`size-1.5 rounded-full ${req.met ? "bg-emerald-500" : "bg-muted-foreground/40"}`} />
+                {req.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <Button type="submit" className="w-full" disabled={pending}>
           {pending ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
-          Create account
+          Create customer account
         </Button>
       </form>
 
