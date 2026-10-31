@@ -6,6 +6,7 @@
 // We additionally accept a BILLING_CRON_SECRET bearer token for scheduled calls.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { generateInvoicePdf } from "../_shared/invoice-pdf.ts";
 
 type SubscriptionRow = {
   id: string;
@@ -16,6 +17,12 @@ type SubscriptionRow = {
   current_period_end: string;
   cancel_at_period_end: boolean;
   discount_id: string | null;
+  customer: {
+    name: string;
+    email: string;
+    address: string | null;
+    tax_id: string | null;
+  } | null;
   plan: { name: string; price: number; interval: string; interval_count: number } | null;
   discount: { type: string; value: number; is_active: boolean; valid_until: string | null } | null;
   tax: { rate: number } | null;
@@ -58,7 +65,7 @@ Deno.serve(async (request) => {
   const { data: due, error: dueError } = await supabase
     .from("subscriptions")
     .select(
-      "id, customer_id, quantity, status, current_period_start, current_period_end, cancel_at_period_end, discount_id, plan:plans(name,price,interval,interval_count), discount:discounts(type,value,is_active,valid_until), tax:taxes(rate)"
+      "id, customer_id, quantity, status, current_period_start, current_period_end, cancel_at_period_end, discount_id, customer:customers(name,email,address,tax_id), plan:plans(name,price,interval,interval_count), discount:discounts(type,value,is_active,valid_until), tax:taxes(rate)"
     )
     .in("status", ["active", "past_due", "trialing"])
     .lte("current_period_end", today);
@@ -109,6 +116,8 @@ Deno.serve(async (request) => {
 
       const issueDate = new Date();
       const dueDate = new Date(issueDate.getTime() + dueDays * 86400000);
+      const issueDateStr = issueDate.toISOString().slice(0, 10);
+      const dueDateStr = dueDate.toISOString().slice(0, 10);
 
       const { data: invoice, error: invoiceError } = await supabase
         .from("invoices")
@@ -117,8 +126,8 @@ Deno.serve(async (request) => {
           customer_id: subscription.customer_id,
           subscription_id: subscription.id,
           status: "open",
-          issue_date: issueDate.toISOString().slice(0, 10),
-          due_date: dueDate.toISOString().slice(0, 10),
+          issue_date: issueDateStr,
+          due_date: dueDateStr,
           period_start: subscription.current_period_start,
           period_end: subscription.current_period_end,
           subtotal,
@@ -131,14 +140,60 @@ Deno.serve(async (request) => {
         .single();
       if (invoiceError) throw invoiceError;
 
+      const itemDescription = `${plan.name} subscription — ${quantity} seat${quantity === 1 ? "" : "s"}`;
       await supabase.from("invoice_items").insert({
         invoice_id: invoice.id,
-        description: `${plan.name} subscription — ${quantity} seat${quantity === 1 ? "" : "s"}`,
+        description: itemDescription,
         quantity,
         unit_price: plan.price,
         amount: subtotal,
         sort_order: 0,
       });
+
+      // Generate & store PDF in Supabase Storage directly from the backend
+      try {
+        const pdfBytes = await generateInvoicePdf({
+          invoice: {
+            id: invoice.id,
+            number: invoice.number,
+            issue_date: issueDateStr,
+            due_date: dueDateStr,
+            period_start: subscription.current_period_start,
+            period_end: subscription.current_period_end,
+            status: "open",
+            subtotal,
+            discount_total: discountTotal,
+            tax_total: taxTotal,
+            total,
+            amount_paid: 0,
+            currency,
+          },
+          customer: subscription.customer,
+          items: [
+            {
+              description: itemDescription,
+              quantity,
+              unit_price: Number(plan.price),
+              amount: subtotal,
+            },
+          ],
+          settings,
+        });
+
+        const pdfPath = `invoices/${subscription.customer_id}/${invoice.id}.pdf`;
+        const { error: uploadError } = await supabase.storage
+          .from("documents")
+          .upload(pdfPath, pdfBytes, {
+            contentType: "application/pdf",
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          await supabase.from("invoices").update({ pdf_path: pdfPath }).eq("id", invoice.id);
+        }
+      } catch (pdfErr) {
+        console.error("PDF generation warning for invoice " + invoice.number + ":", pdfErr);
+      }
 
       const nextStart = subscription.current_period_end;
       const nextEnd = addInterval(nextStart, plan.interval, plan.interval_count ?? 1);

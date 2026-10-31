@@ -15,6 +15,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   if (!invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
+  // Fast-path: If the invoice PDF is already generated and stored by the backend,
+  // stream it directly from the private 'documents' bucket.
+  if (invoice.pdf_path) {
+    const { data: storedFile, error: storageError } = await supabase.storage
+      .from("documents")
+      .download(invoice.pdf_path);
+
+    if (!storageError && storedFile) {
+      const buffer = Buffer.from(await storedFile.arrayBuffer());
+      return new NextResponse(buffer, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${invoice.number}.pdf"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+  }
+
+  // Fallback: If not yet stored, generate dynamically
   // Customers can read their own invoice and download the PDF, but only staff
   // may write to the private bucket or persist the generated document path.
   const {
@@ -25,7 +45,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     : { data: null };
   const canStore = profile?.role === "admin" || profile?.role === "staff";
 
-  const { data: settings } = await supabase.from("app_settings").select("*").eq("id", 1).maybeSingle();  const customer = invoice.customer as {
+  const { data: settings } = await supabase.from("app_settings").select("*").eq("id", 1).maybeSingle();
+  const customer = invoice.customer as {
     name: string;
     email: string;
     address: string | null;
@@ -93,10 +114,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   for (const item of items) {
     const description = String(item.description).slice(0, 62);
-    page.drawText(description, { x: 56, y, size: 9.5, font, color: ink });
-    page.drawText(String(item.quantity), { x: 388, y, size: 9.5, font, color: ink });
-    page.drawText(formatCurrency(Number(item.unit_price), invoice.currency), { x: 420, y, size: 9.5, font, color: ink });
-    page.drawText(formatCurrency(Number(item.amount), invoice.currency), { x: 500, y, size: 9.5, font, color: ink });
+    page.drawText(description, { x: 56, y, size: 9.5, font: font, color: ink });
+    page.drawText(String(item.quantity), { x: 388, y, size: 9.5, font: font, color: ink });
+    page.drawText(formatCurrency(Number(item.unit_price), invoice.currency), { x: 420, y, size: 9.5, font: font, color: ink });
+    page.drawText(formatCurrency(Number(item.amount), invoice.currency), { x: 500, y, size: 9.5, font: font, color: ink });
     page.drawLine({ start: { x: 48, y: y - 10 }, end: { x: width - 48, y: y - 10 }, thickness: 0.5, color: line });
     y -= 28;
   }
@@ -129,7 +150,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   page.drawText("Thank you for your business.", { x: 48, y: 60, size: 9, font, color: muted });
-  page.drawText(`${settings?.company_name ?? "Brightloop"} · ${settings?.support_email ?? "billing@brightloop.io"}`, {
+  page.drawText(`${settings?.company_name ?? "Brightloop Software"} · ${settings?.support_email ?? "billing@brightloop.io"}`, {
     x: 48,
     y: 44,
     size: 8,
