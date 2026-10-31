@@ -96,3 +96,79 @@ async def test_recurring_billing_cycle(mock_db):
     )
     # The subscription current_period_end is now 2026-08-01 > 2026-07-01, so not due
     assert run_res2["created"] == 0
+
+
+@pytest.mark.asyncio
+async def test_zero_dollar_invoice_auto_paid(mock_db):
+    # Free tier or 100% discounted subscription should automatically generate invoice as 'paid'
+    await mock_db.insert("customers", {"id": "c-free", "name": "Free Customer", "email": "free@test.com"})
+    await mock_db.insert(
+        "plans",
+        {
+            "id": "p-free",
+            "name": "Community Plan",
+            "price": 0.0,
+            "interval": "monthly",
+            "interval_count": 1,
+        },
+    )
+    await mock_db.insert(
+        "subscriptions",
+        {
+            "id": "s-free",
+            "customer_id": "c-free",
+            "plan_id": "p-free",
+            "quantity": 1,
+            "status": "active",
+            "current_period_start": "2026-08-01",
+            "current_period_end": "2026-09-01",
+        },
+    )
+
+    res = await InvoiceService.generate_invoice_for_subscription(mock_db, "s-free")
+    inv = res["invoice"]
+    assert inv["total"] == 0.0
+    assert inv["status"] == "paid"
+    assert inv["outstanding_balance"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_list_invoices_payable_filter(mock_db):
+    from app.utils.pagination import PaginationParams
+
+    await mock_db.insert("customers", {"id": "c-pay", "name": "Payable Customer", "email": "pay@test.com"})
+    await mock_db.insert("invoices", {"id": "inv-1", "customer_id": "c-pay", "status": "open", "total": 100.0, "amount_paid": 0.0})
+    await mock_db.insert("invoices", {"id": "inv-2", "customer_id": "c-pay", "status": "partially_paid", "total": 100.0, "amount_paid": 50.0})
+    await mock_db.insert("invoices", {"id": "inv-3", "customer_id": "c-pay", "status": "paid", "total": 100.0, "amount_paid": 100.0})
+    await mock_db.insert("invoices", {"id": "inv-4", "customer_id": "c-pay", "status": "overdue", "total": 100.0, "amount_paid": 0.0})
+
+    payable_invoices, count = await InvoiceService.list_invoices(
+        db=mock_db,
+        params=PaginationParams(page=1, page_size=50),
+        customer_id="c-pay",
+        status="payable",
+    )
+    statuses = {i["status"] for i in payable_invoices}
+    assert "open" in statuses
+    assert "partially_paid" in statuses
+    assert "overdue" in statuses
+    assert "paid" not in statuses
+
+
+@pytest.mark.asyncio
+async def test_zero_dollar_invoice_draft_and_status_preservation(mock_db):
+    # Verify that draft zero-dollar invoices stay draft, and void invoices stay void
+    await mock_db.insert("customers", {"id": "c-status", "name": "Status Customer", "email": "status@test.com"})
+    await mock_db.insert("invoices", {"id": "inv-zero-draft", "customer_id": "c-status", "status": "draft", "total": 0.0, "amount_paid": 0.0})
+    await mock_db.insert("invoices", {"id": "inv-zero-void", "customer_id": "c-status", "status": "void", "total": 0.0, "amount_paid": 0.0})
+    await mock_db.insert("invoices", {"id": "inv-zero-cancelled", "customer_id": "c-status", "status": "cancelled", "total": 0.0, "amount_paid": 0.0})
+
+    inv_draft = await InvoiceService.get_invoice(mock_db, "inv-zero-draft")
+    assert inv_draft["status"] == "draft"
+    assert inv_draft["outstanding_balance"] == 0.0
+
+    inv_void = await InvoiceService.get_invoice(mock_db, "inv-zero-void")
+    assert inv_void["status"] == "void"
+
+    inv_cancelled = await InvoiceService.get_invoice(mock_db, "inv-zero-cancelled")
+    assert inv_cancelled["status"] == "cancelled"

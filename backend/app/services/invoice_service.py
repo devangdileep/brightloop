@@ -24,7 +24,10 @@ class InvoiceService:
         if subscription_id:
             filters["subscription_id"] = f"eq.{subscription_id}"
         if status:
-            filters["status"] = f"eq.{status}"
+            if status == "payable":
+                filters["status"] = "in.(open,partially_paid,overdue)"
+            else:
+                filters["status"] = f"eq.{status}"
 
         data, total = await db.select(
             table="invoices",
@@ -122,11 +125,13 @@ class InvoiceService:
 
         number = await generate_document_number(db, "invoice")
 
+        initial_status = "paid" if total <= Decimal("0.00") else "open"
+
         invoice_data = {
             "number": number,
             "customer_id": payload.customer_id,
             "subscription_id": payload.subscription_id,
-            "status": "open",
+            "status": initial_status,
             "issue_date": format_date_iso(issue_date),
             "due_date": format_date_iso(due_date),
             "period_start": payload.period_start,
@@ -151,7 +156,7 @@ class InvoiceService:
             created_items.append(ins)
 
         created["items"] = created_items
-        created["outstanding_balance"] = float(total)
+        created["outstanding_balance"] = 0.0 if total <= Decimal("0.00") else float(total)
         return created
 
     @staticmethod
@@ -235,11 +240,13 @@ class InvoiceService:
         issue_date = date.today()
         due_date = add_billing_interval(issue_date, "daily", 14)
 
+        initial_status = "paid" if total <= Decimal("0.00") else "open"
+
         invoice_payload = {
             "number": number,
             "customer_id": sub["customer_id"],
             "subscription_id": subscription_id,
-            "status": "open",
+            "status": initial_status,
             "issue_date": format_date_iso(issue_date),
             "due_date": format_date_iso(due_date),
             "period_start": period_start,
@@ -273,7 +280,7 @@ class InvoiceService:
             single=True,
         )
 
-        created["outstanding_balance"] = float(total)
+        created["outstanding_balance"] = 0.0 if total <= Decimal("0.00") else float(total)
         return {"invoice": created, "already_existed": False}
 
     @staticmethod

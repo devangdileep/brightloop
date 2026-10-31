@@ -1,0 +1,56 @@
+# Brightloop Render Blueprint (Canonical)
+# Root blueprint for deployment on Render.
+# Initial deployment configures the FastAPI web service.
+# The daily recurring billing cron service is deferred until the web service
+# and database migrations have been verified in production.
+
+services:
+  - type: web
+    name: brightloop-backend
+    runtime: python
+    region: oregon
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.2
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: BILLING_CRON_SECRET
+        sync: false
+    healthCheckPath: /health
+
+# ---------------------------------------------------------------------------
+# Deferred Cron Service (Enable after verifying API and database in production)
+# ---------------------------------------------------------------------------
+#  - type: cron
+#    name: brightloop-daily-billing
+#    runtime: python
+#    region: oregon
+#    plan: starter
+#    rootDir: backend
+#    schedule: "15 2 * * *" # Daily at 02:15 UTC
+#    buildCommand: pip install -r requirements.txt
+#    startCommand: python -m app.tasks.trigger_billing
+#    envVars:
+#      - key: BACKEND_URL
+#        fromService:
+#          type: web
+#          name: brightloop-backend
+#          property: host
+#      - key: BILLING_CRON_SECRET
+#        sync: false
